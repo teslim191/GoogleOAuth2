@@ -252,9 +252,14 @@ router.put('/reset-password/:resetToken', async (req,res) => {
         const resetToken = req.params.resetToken
         if (!password1 || !password2) {
             res.status(400).json({message: "all fields are required"})
-        } else if (password1 !== password2) {
+        } 
+        else if (password1 < 6 || password1 > 12) {
+            res.status(400).json({message: "password should be between 6 and 12 characters"})
+        }
+        else if (password1 !== password2) {
             res.status(400).json({message: "password do not match"})
-        } else {
+        }
+        else {
             let user = await User.findOne({resetPasswordToken:resetToken})
             if (!user) {
                 res.status(404).json({message: "token does not exist"})
