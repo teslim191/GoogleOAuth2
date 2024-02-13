@@ -156,7 +156,8 @@ router.get('/auth/google/callback', async(req, res) => {
         //fs.writeFileSync('./config/.env',`REFRESH_TOKEN=${refreshToken}`)
         function updateRefreshTokenInEnvFile(RT){
             //file path
-            const envFilePath = path.resolve(__dirname, '../config/.env')
+            const envFilePath = path.resolve(__dirname, '/opt/render/project/src/config/.env')
+            // const envFilePath = path.resolve(__dirname, '../config/.env')
             console.log(envFilePath)
 
             //read content of the .env file
