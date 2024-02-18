@@ -9,6 +9,8 @@ const { google }= require('googleapis')
 const fs  = require('fs')
 const dotenv = require('dotenv')
 const path = require('path')
+const RefreshToken = require('../models/RefreshToken')
+const { ensureAuth, ensureGuest } = require('../middleware/auth')
 
 
 dotenv.config({path: './config/.env'})
@@ -124,8 +126,7 @@ const transporter = nodemailer.createTransport({
         type:'OAuth2',
         user: process.env.EMAIL_ADDRESS,
         clientId: process.env.CLIENT_ID,
-        clientSecret: process.env.CLIENT_SECRET,
-        refreshToken: process.env.REFRESH_TOKEN
+        clientSecret: process.env.CLIENT_SECRET
     },
     debug: true
 })
@@ -134,73 +135,73 @@ const transporter = nodemailer.createTransport({
 
 
 // generate an oAuth2 URL for user consent
-router.get('/auth/google', (req, res) => { 
-    const authUrl = oauth2Client.generateAuthUrl({
-        access_type: 'offline',
-        scope: 'https://mail.google.com/'
-    })
-    res.status(200).json({authUrl})
+router.get('/auth/google',ensureAuth, async(req, res) => { 
+    let user = await User.findOne({email: req.session.user.email})
+    console.log(user)
+    if (user) {
+        const authUrl = oauth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: 'https://mail.google.com/'
+        })
+        res.status(200).json({authUrl})
+    }
 })
 
 
 
-router.get('/auth/google/callback', async(req, res) => {
+router.get('/auth/google/callback', ensureAuth, async(req, res) => {
     const code = req.query.code
-    console.log(code)
-    try {
-        const { tokens } = await oauth2Client.getToken(code)
-        console.log(tokens)
-        const refreshToken = tokens.refresh_token
-        process.env.REFRESH_TOKEN = refreshToken
+    let user = await User.findOne({email: req.session.user.email})
+    console.log(user.email)
 
-        //fs.writeFileSync('./config/.env',`REFRESH_TOKEN=${refreshToken}`)
-        function updateRefreshTokenInEnvFile(RT){
-            //file path
-            const envFilePath = path.resolve(__dirname, '/opt/render/project/src/config/.env')
-            // const envFilePath = path.resolve(__dirname, '../config/.env')
-            console.log(envFilePath)
-
-            //read content of the .env file
-            let envFileContent = fs.readFileSync(envFilePath, 'utf8')
-
-            //split the content into lines
-            const lines = envFileContent.split('\n')
-
-            //find and update the line containing the REFRESH_TOKEN variable
-            let updatedContent = '';
-            lines.forEach(line=> {
-                if (line.startsWith('REFRESH_TOKEN')) {
-                    updatedContent += `REFRESH_TOKEN=${RT}`
-                } else {
-                    updatedContent += `${line}\n`
-                }
-            })
-            fs.writeFileSync(envFilePath, updatedContent, 'utf8')
-        }
-        const newRt = refreshToken
-        updateRefreshTokenInEnvFile(newRt)
-        // console.log(refreshToken)
-        // console.log(process.env.REFRESH_TOKEN)
-        // fs.appendFileSync('./config/.env', `\nREFRESH_TOKEN=${refreshToken}`)
-
-        // update transporter with the new access token
-        globalThis.newTransporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                type: "OAuth2",
-                user: process.env.EMAIL_ADDRESS,
-                clientId: process.env.CLIENT_ID,
-                clientSecret: process.env.CLIENT_SECRET,
-                refreshToken: process.env.REFRESH_TOKEN,
-                accessToken:tokens.access_token
+    if (user) {
+        try {
+            const { tokens } = await oauth2Client.getToken(code)
+            console.log(tokens)
+            const refreshtoken = tokens.refresh_token
+    
+            //store the token in a db
+            //check if refresh token exist
+            let existingToken = await RefreshToken.findOne({userId: user._id})
+            if (!existingToken) {
+                const newRefreshToken = new RefreshToken({
+                    userId: req.session.user._id,
+                    refresh_token: refreshtoken
+                })
+                await newRefreshToken.save();
+                // update transporter with the new access token
+                globalThis.newTransporter = nodemailer.createTransport({
+                    service: 'gmail',
+                    auth: {
+                        type: "OAuth2",
+                        user: process.env.EMAIL_ADDRESS,
+                        clientId: process.env.CLIENT_ID,
+                        clientSecret: process.env.CLIENT_SECRET,
+                        refreshToken: newRefreshToken.refresh_token,
+                        accessToken:tokens.access_token
+                    }
+                })        
             }
-        })
+            else{
+                //update the transporter with the existing refreshtoken
+                 globalThis.newTransporter = nodemailer.createTransport({
+                    service: 'gmail',
+                    auth: {
+                        type: "OAuth2",
+                        user: process.env.EMAIL_ADDRESS,
+                        clientId: process.env.CLIENT_ID,
+                        clientSecret: process.env.CLIENT_SECRET,
+                        refreshToken: existingToken.refresh_token,
+                        accessToken:tokens.access_token
+                    }
+                })                
+            }
+            console.log(newTransporter)
+            res.status(200).json({message: "refresh token obtained successfully"})
+        } catch (error) {
+            console.log(error)
+        }
         
-        console.log(newTransporter)
-        console.log(transporter)
-        res.status(200).json({message: "refresh token obtained successfully"})
-    } catch (error) {
-        console.log(error)
     }
 })
 
