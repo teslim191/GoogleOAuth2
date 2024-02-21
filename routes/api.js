@@ -235,6 +235,7 @@ router.post('/forgot-password', async (req, res) => {
             newTransporter.sendMail(mailOptions,(err) => {
                 if (err) {
                     console.log(err)
+                    res.json(400).json({message: "unable to send email at this time. please try again later"})
                 }
                 else{
                     res.status(200).json({message:'password reset email sent'})
