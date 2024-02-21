@@ -230,7 +230,7 @@ router.post('/forgot-password', async (req, res) => {
                 from: process.env.EMAIL_ADDRESS,
                 to:user.email,
                 subject: "Password Reset Request",
-                text: `Click the following link to reset your password: http://localhost:9000/api/reset-password/${resetToken}`
+                text: `Click the following link to reset your password: https://oauth-txzk.onrender.com/api/reset-password/${resetToken}`
             }
             newTransporter.sendMail(mailOptions,(err) => {
                 if (err) {
