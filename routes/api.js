@@ -158,9 +158,19 @@ router.get('/auth/google/callback', ensureAuth, async(req, res) => {
         try {
             const { tokens } = await oauth2Client.getToken(code)
             console.log(tokens)
-            const refreshtoken = tokens.refresh_token
-    
-            //store the token in a db
+            // const refreshtoken = tokens.refresh_token
+            let refreshtoken
+
+            //if there is token and refresh token
+            if (tokens && tokens.refresh_token) {
+                refreshtoken = tokens.refresh_token
+            }
+            else{
+                //if no token
+                refreshtoken = await generateSecureToken(32)
+                console.log(refreshtoken)
+            }
+                //store the token in a db
             //check if refresh token exist
             let existingToken = await RefreshToken.findOne({userId: user._id})
             if (!existingToken) {
@@ -169,20 +179,10 @@ router.get('/auth/google/callback', ensureAuth, async(req, res) => {
                     refresh_token: refreshtoken
                 })
                 await newRefreshToken.save();
-                // update transporter with the new access token
-                globalThis.newTransporter = nodemailer.createTransport({
-                    service: 'gmail',
-                    auth: {
-                        type: "OAuth2",
-                        user: process.env.EMAIL_ADDRESS,
-                        clientId: process.env.CLIENT_ID,
-                        clientSecret: process.env.CLIENT_SECRET,
-                        refreshToken: newRefreshToken.refresh_token,
-                        accessToken:tokens.access_token
-                    }
-                })        
+                existingToken = newRefreshToken     
             }
-            else{
+            // else{
+                // console.log(existingToken.refresh_token)
                 //update the transporter with the existing refreshtoken
                  globalThis.newTransporter = nodemailer.createTransport({
                     service: 'gmail',
@@ -195,10 +195,10 @@ router.get('/auth/google/callback', ensureAuth, async(req, res) => {
                         accessToken:tokens.access_token
                     }
                 })                
+                console.log(newTransporter)
+                res.status(200).json({message: "refresh token obtained successfully"})
             }
-            console.log(newTransporter)
-            res.status(200).json({message: "refresh token obtained successfully"})
-        } catch (error) {
+        catch (error) {
             console.log(error)
         }
         
@@ -282,5 +282,17 @@ router.put('/reset-password/:resetToken', async (req,res) => {
     } catch (error) {
         console.log(error)
     }
+})
+
+//log-out
+router.get('/logout',(req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            throw err
+        }
+        else {
+            res.status(200).json({message: "you have logged out successfully"})
+        }
+    })
 })
 module.exports = router
